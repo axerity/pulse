@@ -10,11 +10,12 @@ type Message struct {
 	RawData json.RawMessage `json:"data,omitempty"`
 }
 
+// check https://github.com/pusher/pusher-socket-protocol/blob/master/protocol.adoc#events
 func (m *Message) MarshalJSON() ([]byte, error) {
 	type TempMessage struct {
-		Event   string          `json:"event"`
-		Channel *string         `json:"channel,omitempty"`
-		Data    json.RawMessage `json:"data,omitempty"`
+		Event   string  `json:"event"`
+		Channel *string `json:"channel,omitempty"`
+		Data    string  `json:"data,omitempty"`
 	}
 
 	temp := TempMessage{
@@ -23,9 +24,9 @@ func (m *Message) MarshalJSON() ([]byte, error) {
 	}
 
 	if m.Data != "" {
-		temp.Data = json.RawMessage(m.Data)
+		temp.Data = m.Data
 	} else if len(m.RawData) > 0 {
-		temp.Data = m.RawData
+		temp.Data = string(m.RawData)
 	}
 
 	return json.Marshal(temp)
