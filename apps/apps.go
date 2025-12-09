@@ -37,13 +37,15 @@ type Config struct {
 
 type Manager struct {
 	apps         map[string]*App // key -> app
+	appsById     map[string]*App // id -> app
 	serverConfig ServerConfig
 	mu           sync.RWMutex
 }
 
 func NewManager() *Manager {
 	return &Manager{
-		apps: make(map[string]*App),
+		apps:     make(map[string]*App),
+		appsById: make(map[string]*App),
 	}
 }
 
@@ -64,11 +66,13 @@ func (m *Manager) LoadFromFile(filename string) (*ServerConfig, error) {
 	m.serverConfig = config.Server
 
 	m.apps = make(map[string]*App)
+	m.appsById = make(map[string]*App)
 
 	for i := range config.Apps {
 		app := &config.Apps[i]
 		if app.Enabled {
 			m.apps[app.Key] = app
+			m.appsById[app.ID] = app
 		}
 	}
 
@@ -85,6 +89,13 @@ func (m *Manager) GetApp(key string) (*App, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	app, exists := m.apps[key]
+	return app, exists
+}
+
+func (m *Manager) GetAppByID(id string) (*App, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	app, exists := m.appsById[id]
 	return app, exists
 }
 

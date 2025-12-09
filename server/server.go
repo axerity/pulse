@@ -176,17 +176,15 @@ func (s *Server) HandleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	appID := parts[1]
 
-	var targetApp *apps.App
-	for _, app := range s.appsManager.GetAllApps() {
-		if app.ID == appID {
-			targetApp = app
-			break
-		}
-	}
-	if targetApp == nil {
+	targetApp, exists := s.appsManager.GetAppByID(appID)
+	if !exists {
 		http.Error(w, "App not found", http.StatusNotFound)
 		return
 	}
+
+	// limit request body size (default 10KB, or app's max message size)
+	maxBodySize := max(targetApp.GetMaxMessageSize(), 10240)
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -254,17 +252,17 @@ func (s *Server) HandleBatchEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	appID := parts[1]
 
-	var targetApp *apps.App
-	for _, app := range s.appsManager.GetAllApps() {
-		if app.ID == appID {
-			targetApp = app
-			break
-		}
-	}
-	if targetApp == nil {
+	targetApp, exists := s.appsManager.GetAppByID(appID)
+	if !exists {
 		http.Error(w, "App not found", http.StatusNotFound)
 		return
 	}
+
+	// limit request body size for batch (10x single message size)
+	// min 100KB for batch
+	maxBodySize := max(targetApp.GetMaxMessageSize()*10,
+		102400)
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {

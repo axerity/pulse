@@ -95,13 +95,11 @@ func (c *Connection) WritePump() {
 	}()
 
 	const writeDeadline = 10 * time.Second
-	deadline := time.Now().Add(writeDeadline)
 
 	for {
 		select {
 		case message, ok := <-c.send:
-			deadline = time.Now().Add(writeDeadline)
-			c.ws.SetWriteDeadline(deadline)
+			c.ws.SetWriteDeadline(time.Now().Add(writeDeadline))
 
 			if !ok {
 				c.drainMessages()
