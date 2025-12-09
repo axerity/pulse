@@ -19,6 +19,8 @@ type App struct {
 	MaxMessageSize     int64    `json:"max_message_size"`
 	MaxBatchEvents     int      `json:"max_batch_events"`
 	EnableClientEvents *bool    `json:"enable_client_events"`
+	MaxEventRate       int      `json:"max_event_rate"`
+	MaxEventBurst      int      `json:"max_event_burst"`
 }
 
 type ServerConfig struct {
@@ -160,4 +162,18 @@ func (a *App) IsClientEventsEnabled() bool {
 		return false
 	}
 	return *a.EnableClientEvents
+}
+
+func (a *App) GetMaxEventRate() int {
+	if a.MaxEventRate <= 0 {
+		return 10
+	}
+	return a.MaxEventRate
+}
+
+func (a *App) GetMaxEventBurst() int {
+	if a.MaxEventBurst <= 0 {
+		return 20
+	}
+	return a.MaxEventBurst
 }

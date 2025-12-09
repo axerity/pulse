@@ -49,7 +49,7 @@ type Manager struct {
 func NewManager(channelManager *channel.Manager, authService *auth.Service, maxConnections int) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	return &Manager{
+	m := &Manager{
 		connections:     make(map[string]*Connection),
 		channelManager:  channelManager,
 		presenceManager: presence.NewManager(),
@@ -60,6 +60,49 @@ func NewManager(channelManager *channel.Manager, authService *auth.Service, maxC
 		connectionSem:   make(chan struct{}, maxConnections),
 		ctx:             ctx,
 		cancel:          cancel,
+	}
+
+	// start background goroutine to close inactive connections
+	go m.cleanupInactiveConnections()
+
+	return m
+}
+
+// cleanupInactiveConnections periodically checks and closes connections
+// that have been inactive for too long (24 hours per Pusher protocol spec)
+func (m *Manager) cleanupInactiveConnections() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	const maxInactivity = 24 * time.Hour
+
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-ticker.C:
+			m.connectionsMux.RLock()
+			var toClose []*Connection
+			now := time.Now()
+
+			for _, conn := range m.connections {
+				if now.Sub(conn.lastActivity) > maxInactivity {
+					toClose = append(toClose, conn)
+				}
+			}
+			m.connectionsMux.RUnlock()
+
+			for _, conn := range toClose {
+				log.Debug("closing inactive connection", "id", conn.ID, "last_activity", conn.lastActivity)
+				// send error before closing (code 4202: closed after inactivity)
+				code := protocol.ErrorClosedAfterInactivityTimeout
+				errMsg, err := protocol.NewError("Connection closed due to inactivity", &code)
+				if err == nil {
+					conn.SendMessage(errMsg)
+				}
+				conn.Close()
+			}
+		}
 	}
 }
 
@@ -105,6 +148,13 @@ func (m *Manager) RegisterWithApp(ws *websocket.Conn, appKey string) (*Connectio
 
 	conn := NewConnection(socketID, ws, m, m.activityTimeout)
 	conn.AppKey = appKey
+
+	// set rate limits from app config
+	if m.appsManager != nil {
+		if app, exists := m.appsManager.GetApp(appKey); exists {
+			conn.SetRateLimit(app.GetMaxEventRate(), app.GetMaxEventBurst())
+		}
+	}
 
 	m.connectionsMux.Lock()
 	m.connections[socketID] = conn

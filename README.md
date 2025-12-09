@@ -94,7 +94,9 @@ An example config (name this as `config.json` then pass it via flag `-config=pat
       "allowed_origins": ["*"],
       "max_message_size": 8192,
       "max_batch_events": 100,
-      "enable_client_events": true
+      "enable_client_events": true,
+      "max_event_rate": 10,
+      "max_event_burst": 20
     }
   ]
 }
@@ -126,6 +128,8 @@ An example config (name this as `config.json` then pass it via flag `-config=pat
 | `max_message_size` | number | Maximum message size in bytes |
 | `max_batch_events` | number | Maximum number of events in a batch trigger |
 | `enable_client_events` | boolean | Allow clients to trigger events prefixed with `client-` |
+| `max_event_rate` | number | Maximum client events per second (default: 10) |
+| `max_event_burst` | number | Maximum burst capacity for client events (default: 20) |
 
 ## License
 

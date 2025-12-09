@@ -10,6 +10,7 @@ import (
 	"github.com/aelpxy/pulse/protocol"
 	"github.com/charmbracelet/log"
 	"github.com/gorilla/websocket"
+	"golang.org/x/time/rate"
 )
 
 var bufferPool = sync.Pool{
@@ -32,6 +33,7 @@ type Connection struct {
 	closeMux        sync.Mutex
 	isClosed        bool
 	closeOnce       sync.Once
+	rateLimiter     *rate.Limiter
 }
 
 func NewConnection(id string, ws *websocket.Conn, manager *Manager, activityTimeout time.Duration) *Connection {
@@ -45,7 +47,12 @@ func NewConnection(id string, ws *websocket.Conn, manager *Manager, activityTime
 		activityTimeout: activityTimeout,
 		closing:         make(chan struct{}),
 		isClosed:        false,
+		rateLimiter:     rate.NewLimiter(10, 20), // default, updated per app config
 	}
+}
+
+func (c *Connection) SetRateLimit(eventsPerSecond int, burst int) {
+	c.rateLimiter = rate.NewLimiter(rate.Limit(eventsPerSecond), burst)
 }
 
 func (c *Connection) ReadPump() {
@@ -281,6 +288,13 @@ func (c *Connection) handleUnsubscribe(msg *protocol.Message) {
 
 func (c *Connection) handleClientEvent(msg *protocol.Message) {
 	if len(msg.Event) < 7 || msg.Event[:7] != "client-" {
+		return
+	}
+
+	// rate limit client events (error 4301 per Pusher protocol)
+	if !c.rateLimiter.Allow() {
+		code := protocol.ErrorClientEventRateLimitReached
+		c.sendError("Rate limit exceeded for client events", &code)
 		return
 	}
 
